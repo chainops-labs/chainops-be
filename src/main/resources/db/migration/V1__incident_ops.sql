@@ -12,6 +12,8 @@ create table incident (
   title varchar(180) not null,
   severity varchar(24) not null,
   status varchar(24) not null,
+  trace_id varchar(120) not null,
+  elk_url varchar(500) not null,
   started_at timestamptz not null,
   resolved_at timestamptz
 );

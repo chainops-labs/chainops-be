@@ -44,6 +44,8 @@ class IncidentService(private val incidentStore: IncidentStore) {
             title = request.title,
             severity = request.severity,
             status = "OPEN",
+            traceId = "trace-${UUID.randomUUID()}",
+            elkUrl = "http://localhost:5601/app/discover",
             mttrMinutes = 0,
             startedAt = Instant.now(),
             resolvedAt = null,
@@ -69,6 +71,7 @@ class JdbcIncidentStore(private val jdbcClient: JdbcClient) : IncidentStore {
     override fun findAll(): List<Incident> = jdbcClient.sql(
         """
         select id, title, severity, status, started_at, resolved_at,
+               trace_id, elk_url,
                coalesce(extract(epoch from (resolved_at - started_at)) / 60, 0) as mttr_minutes
         from incident
         order by started_at desc
@@ -78,14 +81,16 @@ class JdbcIncidentStore(private val jdbcClient: JdbcClient) : IncidentStore {
     override fun create(incident: Incident): Incident {
         jdbcClient.sql(
             """
-            insert into incident (id, title, severity, status, started_at, resolved_at)
-            values (:id, :title, :severity, :status, :startedAt, :resolvedAt)
+            insert into incident (id, title, severity, status, trace_id, elk_url, started_at, resolved_at)
+            values (:id, :title, :severity, :status, :traceId, :elkUrl, :startedAt, :resolvedAt)
             """.trimIndent(),
         )
             .param("id", incident.id)
             .param("title", incident.title)
             .param("severity", incident.severity)
             .param("status", incident.status)
+            .param("traceId", incident.traceId)
+            .param("elkUrl", incident.elkUrl)
             .param("startedAt", incident.startedAt)
             .param("resolvedAt", incident.resolvedAt)
             .update()
@@ -112,6 +117,7 @@ class JdbcIncidentStore(private val jdbcClient: JdbcClient) : IncidentStore {
         return jdbcClient.sql(
             """
             select id, title, severity, status, started_at, resolved_at,
+                   trace_id, elk_url,
                    coalesce(extract(epoch from (resolved_at - started_at)) / 60, 0) as mttr_minutes
             from incident
             where id = :id
@@ -141,6 +147,8 @@ class JdbcIncidentStore(private val jdbcClient: JdbcClient) : IncidentStore {
         title = rs.getString("title"),
         severity = rs.getString("severity"),
         status = rs.getString("status"),
+        traceId = rs.getString("trace_id"),
+        elkUrl = rs.getString("elk_url"),
         mttrMinutes = rs.getDouble("mttr_minutes").toInt(),
         startedAt = rs.getTimestamp("started_at").toInstant(),
         resolvedAt = rs.getTimestamp("resolved_at")?.toInstant(),
@@ -154,6 +162,8 @@ data class Incident(
     val title: String,
     val severity: String,
     val status: String,
+    val traceId: String,
+    val elkUrl: String,
     val mttrMinutes: Int,
     val startedAt: Instant,
     val resolvedAt: Instant?,

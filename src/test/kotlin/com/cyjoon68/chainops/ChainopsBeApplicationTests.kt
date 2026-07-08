@@ -17,6 +17,8 @@ class ChainopsBeApplicationTests {
                         title = "deploy latency",
                         severity = "SEV2",
                         status = "RESOLVED",
+                        traceId = "trace-test-1",
+                        elkUrl = "http://localhost:5601/app/discover#/trace-test-1",
                         mttrMinutes = 18,
                         startedAt = Instant.parse("2026-07-08T10:20:00Z"),
                         resolvedAt = Instant.parse("2026-07-08T10:38:00Z"),
@@ -26,6 +28,8 @@ class ChainopsBeApplicationTests {
                         title = "gitops drift",
                         severity = "SEV3",
                         status = "RESOLVED",
+                        traceId = "trace-test-2",
+                        elkUrl = "http://localhost:5601/app/discover#/trace-test-2",
                         mttrMinutes = 9,
                         startedAt = Instant.parse("2026-07-08T09:30:00Z"),
                         resolvedAt = Instant.parse("2026-07-08T09:39:00Z"),
@@ -46,6 +50,8 @@ class ChainopsBeApplicationTests {
         val incident = service.create(CreateIncidentRequest("api saturation", "SEV2"))
 
         assertEquals("OPEN", incident.status)
+        assertTrue(incident.traceId.startsWith("trace-"))
+        assertEquals("http://localhost:5601/app/discover", incident.elkUrl)
         assertTrue(incident.startedAt <= Instant.now())
     }
 }
