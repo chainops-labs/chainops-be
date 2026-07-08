@@ -1,0 +1,30 @@
+name: policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches-ignore: [develop, main]
+
+jobs:
+  git-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [[ ! "$branch" =~ ^(feat|fix|refactor|chore|docs|test)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "Invalid branch name: $branch"
+            echo "Use feat|fix|refactor|chore|docs|test/<short-kebab-summary>"
+            exit 1
+          fi
+      - name: Check PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ ! "$PR_TITLE" =~ ^(feat|fix|refactor|chore|docs|test)\([a-z0-9-]+\):\ .{1,72}$ ]]; then
+            echo "Invalid PR title: $PR_TITLE"
+            echo "Use type(scope): summary"
+            exit 1
+          fi
