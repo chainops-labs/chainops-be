@@ -1,17 +1,81 @@
 package com.cyjoon68.chainops
 
-import org.junit.jupiter.api.Test
+import java.time.Instant
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ChainopsBeApplicationTests {
+    @Test
+    fun calculatesMttrFromResolvedIncidentTimestamps() {
+        val service = IncidentService(
+            InMemoryIncidentStore(
+                listOf(
+                    Incident(
+                        id = UUID.randomUUID(),
+                        title = "deploy latency",
+                        severity = "SEV2",
+                        status = "RESOLVED",
+                        mttrMinutes = 18,
+                        startedAt = Instant.parse("2026-07-08T10:20:00Z"),
+                        resolvedAt = Instant.parse("2026-07-08T10:38:00Z"),
+                    ),
+                    Incident(
+                        id = UUID.randomUUID(),
+                        title = "gitops drift",
+                        severity = "SEV3",
+                        status = "RESOLVED",
+                        mttrMinutes = 9,
+                        startedAt = Instant.parse("2026-07-08T09:30:00Z"),
+                        resolvedAt = Instant.parse("2026-07-08T09:39:00Z"),
+                    ),
+                ),
+            ),
+        )
 
-	@Test
-	fun calculatesMttrFromIncidents() {
-		val service = IncidentService()
-		val mttr = service.mttr()
+        val mttr = service.mttr()
 
-		assertTrue(mttr.averageMinutes > 0.0)
-		assertTrue(mttr.sampleSize > 0)
-	}
+        assertEquals(13.5, mttr.averageMinutes)
+        assertEquals(2, mttr.sampleSize)
+    }
 
+    @Test
+    fun createsOpenIncidentForCurrentDrill() {
+        val service = IncidentService(InMemoryIncidentStore(emptyList()))
+        val incident = service.create(CreateIncidentRequest("api saturation", "SEV2"))
+
+        assertEquals("OPEN", incident.status)
+        assertTrue(incident.startedAt <= Instant.now())
+    }
+}
+
+private class InMemoryIncidentStore(initialIncidents: List<Incident>) : IncidentStore {
+    private val incidents = initialIncidents.toMutableList()
+
+    override fun findAll(): List<Incident> = incidents.toList()
+
+    override fun create(incident: Incident): Incident {
+        incidents += incident
+        return incident
+    }
+
+    override fun transition(id: UUID, status: String): Incident {
+        val index = incidents.indexOfFirst { it.id == id }
+        val current = incidents[index]
+        val updated = current.copy(status = status, resolvedAt = if (status == "RESOLVED") Instant.now() else current.resolvedAt)
+        incidents[index] = updated
+        return updated
+    }
+
+    override fun mttr(): MttrResponse {
+        val resolvedDurations = incidents.mapNotNull { incident ->
+            incident.resolvedAt?.let { java.time.Duration.between(incident.startedAt, it).toMinutes().toDouble() }
+        }
+
+        return MttrResponse(
+            averageMinutes = resolvedDurations.average(),
+            sampleSize = resolvedDurations.size,
+        )
+    }
 }
