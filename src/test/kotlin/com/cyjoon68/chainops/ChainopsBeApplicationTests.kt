@@ -54,6 +54,21 @@ class ChainopsBeApplicationTests {
         assertEquals("http://localhost:5601/app/discover", incident.elkUrl)
         assertTrue(incident.startedAt <= Instant.now())
     }
+
+    @Test
+    fun recordsDeployEventAndRollbackChecklistState() {
+        val service = IncidentService(InMemoryIncidentStore(emptyList()))
+        val incident = service.create(CreateIncidentRequest("verifier deploy latency", "SEV2"))
+        val deployEvent = service.createDeployEvent(
+            CreateDeployEventRequest("verifier-api", "abc1234", "verifier-api:test", "DEGRADED"),
+        )
+        val check = service.rollbackChecks(incident.id).first { !it.checked }
+        val updated = service.updateRollbackCheck(check.id, true)
+
+        assertEquals("verifier-api", deployEvent.serviceName)
+        assertEquals("DEGRADED", deployEvent.status)
+        assertTrue(updated.checked)
+    }
 }
 
 private class InMemoryIncidentStore(initialIncidents: List<Incident>) : IncidentStore {
